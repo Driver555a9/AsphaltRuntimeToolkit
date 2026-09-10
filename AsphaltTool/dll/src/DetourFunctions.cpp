@@ -1200,8 +1200,8 @@ namespace AsphaltDLL
                 std::mt19937 g_engine;
                 bool g_seeded = false;
                 constexpr uint32_t FIXED_SEED = 0; // NEVER CHANGE THIS
-                constexpr float F_CONSTANT = 4294967296.0f;
-                constexpr float D_CONSTANT = 4294967296.0;
+                constexpr float  F_CONSTANT = 4294967296.0f;
+                constexpr double D_CONSTANT = 4294967296.0;
                 // Anti change protection
                 static_assert(F_CONSTANT == 4294967296.0f);  
                 static_assert(D_CONSTANT == 4294967296.0);
