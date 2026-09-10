@@ -29,7 +29,7 @@ namespace AsphaltDLL
         // This function called from the games main thread
         // Dispatches logic for new frame (including Physics worker thread)
         // On this same thread runs camera and cp logic
-        // May not be used for replay entry point, because this function runs even in menus
+        // May not be used for replay new tick entry point, because this function runs even in menus
         ////////////////////////////////////////////
         namespace NewLogicTickDispatcher
         {
@@ -57,7 +57,6 @@ namespace AsphaltDLL
         }
 
         ////////////////////////////////////////////////////////////
-        // Function called is wrapper around bullet world
         // [rdx] is float seconds interval time from last call
         // Function internally increments a counter with [rdx] and does as many physics ticks until that counter is < 0, subtracting PF each tick
         // [rcx] is a proxy between game world and discretedynamicsworld
@@ -269,6 +268,26 @@ namespace AsphaltDLL
             bool EnableHook() noexcept;
             bool DisableHook() noexcept;
             [[nodiscard]] HookState GetHookState() noexcept;
+        }
+
+        ///////////////////////////////////////
+        // Useful to easily enable / disable respawn or wreck functionality
+        ///////////////////////////////////////
+        namespace NativeQueueRacerRespawn
+        {
+            [[nodiscard]] bool GetRespawnIsAllowed() noexcept;
+            void SetRespawnIsAllowed(bool on) noexcept;
+            bool SetupHook() noexcept;
+            bool RemoveHook() noexcept;
+            bool EnableHook() noexcept;
+            bool DisableHook() noexcept;
+            [[nodiscard]] HookState GetHookState() noexcept;
+        }
+
+        namespace AllowWreck
+        {
+            [[nodiscard]] bool GetWreckIsAllowed() noexcept;
+            void SetWreckIsAllowed(bool on) noexcept;
         }
 
         ///////////////////////////////////////

@@ -15,7 +15,10 @@
 #include "stb_image.h"
 #include "imgui.h"
 
+#include <algorithm>
+#include <cassert>
 #include <filesystem>
+#include <limits>
 #include <optional>
 
 namespace CoreEngine
@@ -77,6 +80,15 @@ namespace CoreEngine
             constexpr Units::MicroSecond min_dt (1L);
             constexpr Units::MicroSecond max_dt (100'000L);
             m_frame_delta_time = std::clamp<Units::MicroSecond>(frame_timer.GetElapsedAndRestart<Units::MicroSecond>(), min_dt, max_dt);
+
+            {
+                std::scoped_lock<std::mutex> lock(m_schedule_tasks_mutex);
+                for (auto& task : m_scheduled_tasks)
+                {
+                    task->Execute();
+                }
+                m_scheduled_tasks.clear();
+            }
 
             for (std::unique_ptr<WindowLayerStack>& wls : m_window_layer_stacks)
             {
@@ -154,14 +166,14 @@ namespace CoreEngine
                     const Window::Handle handle = m_window_layer_stacks_to_delete_next_frame.back();
                     m_window_layer_stacks_to_delete_next_frame.pop_back();
 
-                    try
-                    {
-                        const size_t index = FindWindowLayerStackIndexFromWindowHandle(handle);
-                        m_window_layer_stacks.erase(m_window_layer_stacks.begin() + index);
-                    }
-                    catch (const std::exception&)
+                    const size_t index = FindWindowLayerStackIndexFromWindowHandle(handle);
+                    if (index == std::numeric_limits<size_t>::max())
                     {
                         ENGINE_ERROR_PRINT("Failed to delete window with handle: " << handle);
+                    }
+                    else 
+                    {
+                        m_window_layer_stacks.erase(m_window_layer_stacks.begin() + index);
                     }
                 }
 
@@ -217,7 +229,8 @@ namespace CoreEngine
 
     Window* Application::GetWindowPtr(Window::Handle group_handle) 
     {
-        return m_window_layer_stacks[FindWindowLayerStackIndexFromWindowHandle(group_handle)]->m_window_ptr.get();
+        const size_t result = FindWindowLayerStackIndexFromWindowHandle(group_handle);
+        return result == std::numeric_limits<size_t>::max() ? nullptr : m_window_layer_stacks[result]->m_window_ptr.get();
     }
 
     size_t Application::GetAmountWindows() const noexcept
@@ -249,7 +262,7 @@ namespace CoreEngine
     
     /////////////////////////////////////////////// 
     // Application creation
-    //////////////////////////////////////////////// 
+    /////////////////////////////////////////////// 
     Application Application::Create(const ApplicationConfig& config)
     {
         if (s_application_instance_ptr)
@@ -362,48 +375,67 @@ namespace CoreEngine
     //////////////////////////////////////////////// 
     void Application::KeyCallback(GLFWwindow* window, int key, [[maybe_unused]] int scancode, [[maybe_unused]] int action, [[maybe_unused]] int mods)
     {
-        const Window::Handle handle = s_application_instance_ptr->FindWindowHandleFromGlfwWindow(window);
-        if (action == GLFW_PRESS)        s_application_instance_ptr->RaiseEvent(handle, KeyPressedEvent  {key} );
-        else if (action == GLFW_RELEASE) s_application_instance_ptr->RaiseEvent(handle, KeyReleasedEvent {key} );
+        const auto handle = Get()->FindWindowHandleFromGlfwWindow(window);
+        if (handle)
+        {
+            if (action == GLFW_PRESS)        Get()->RaiseEvent(handle.value(), KeyPressedEvent  {key} );
+            else if (action == GLFW_RELEASE) Get()->RaiseEvent(handle.value(), KeyReleasedEvent {key} );
+        }
     }
 
     void Application::MouseButtonCallback(GLFWwindow* window, int button, int action, [[maybe_unused]] int mods)
     {
-        const Window::Handle handle = s_application_instance_ptr->FindWindowHandleFromGlfwWindow(window);
-        if (action == GLFW_PRESS)        s_application_instance_ptr->RaiseEvent(handle, MousePressedEvent  {button, CommonUtility::GetMousePosition(window)});
-        else if (action == GLFW_RELEASE) s_application_instance_ptr->RaiseEvent(handle, MouseReleasedEvent {button, CommonUtility::GetMousePosition(window)});
+        const auto handle = Get()->FindWindowHandleFromGlfwWindow(window);
+        if (handle)
+        {
+            if (action == GLFW_PRESS)        Get()->RaiseEvent(handle.value(), MousePressedEvent  {button, CommonUtility::GetMousePosition(window)});
+            else if (action == GLFW_RELEASE) Get()->RaiseEvent(handle.value(), MouseReleasedEvent {button, CommonUtility::GetMousePosition(window)});
+        }
     }
 
     void Application::MouseMovedCallback(GLFWwindow* window, double x_pos, double y_pos)
     {
-        const Window::Handle handle = s_application_instance_ptr->FindWindowHandleFromGlfwWindow(window);
-        s_application_instance_ptr->RaiseEvent(handle, MouseMovedEvent{x_pos, y_pos});
+        const auto handle = s_application_instance_ptr->FindWindowHandleFromGlfwWindow(window);
+        if (handle)
+        {
+            s_application_instance_ptr->RaiseEvent(handle.value(), MouseMovedEvent{x_pos, y_pos});
+        }
     }
 
     void Application::MouseScrollCallback(GLFWwindow* window, double x_offset, double y_offset)
     {
-        const Window::Handle handle = s_application_instance_ptr->FindWindowHandleFromGlfwWindow(window);
-        s_application_instance_ptr->RaiseEvent(handle, MouseScrolledEvent {x_offset, y_offset} );
+        const auto handle = Get()->FindWindowHandleFromGlfwWindow(window);
+        if (handle)
+        {
+            Get()->RaiseEvent(handle.value(), MouseScrolledEvent {x_offset, y_offset} );
+        }
     }
 
     void Application::FramebufferResizeCallback(GLFWwindow* window, int width, int height)
     {
         glfwMakeContextCurrent(window);
         glViewport(0, 0, width, height);
-        const Window::Handle handle = s_application_instance_ptr->FindWindowHandleFromGlfwWindow(window);
-        s_application_instance_ptr->RaiseEvent(handle, FramebufferResizeEvent {width, height});
+        const auto handle = Get()->FindWindowHandleFromGlfwWindow(window);
+        if (handle)
+        {
+            Get()->RaiseEvent(handle.value(), FramebufferResizeEvent {width, height});
+        }
     }
 
     void Application::WindowCloseCallback(GLFWwindow* window)
     {
-        const Window::Handle handle = s_application_instance_ptr->FindWindowHandleFromGlfwWindow(window);
-        s_application_instance_ptr->RaiseEvent(handle, WindowCloseEvent {});
-
-        s_application_instance_ptr->QueueDeleteWindowLayerStack(s_application_instance_ptr->FindWindowHandleFromGlfwWindow(window));
-
-        if (s_application_instance_ptr->m_window_layer_stacks.size() == 1)
+        Application* app = Get();
+        const auto handle = app->FindWindowHandleFromGlfwWindow(window);
+        if (handle)
         {
-            s_application_instance_ptr->Stop();
+            app->RaiseEvent(handle.value(), WindowCloseEvent {});
+
+            app->QueueDeleteWindowLayerStack(handle.value());
+
+            if (app->m_window_layer_stacks.size() == 1)
+            {
+                app->Stop();
+            }
         }
     }
     
@@ -411,14 +443,14 @@ namespace CoreEngine
     //////////////////////////////////////////////// 
     //--------- Private methods
     //////////////////////////////////////////////// 
-    Window::Handle Application::FindWindowHandleFromGlfwWindow(GLFWwindow* window) const
+    std::optional<Window::Handle> Application::FindWindowHandleFromGlfwWindow(GLFWwindow* window) const
     {
         for (size_t index{}; index < m_window_layer_stacks.size(); ++index)
         {
             if (m_window_layer_stacks[index]->m_window_ptr->GetGLFWwindow() == window)
                 return m_window_layer_stacks[index]->m_window_ptr->GetHandle();
         }
-        throw std::runtime_error("Failed to fetch Window Handle from glfw window*: GLFWwindow not part of window layer stack.");
+        return std::nullopt;
     }
 
     size_t Application::FindWindowLayerStackIndexFromWindowHandle(Window::Handle handle) const
@@ -428,6 +460,6 @@ namespace CoreEngine
             if (m_window_layer_stacks[index]->m_window_ptr->GetHandle() == handle)
                 return index;
         }
-        throw std::runtime_error("Failed to find window layer stack index from Handle: GLFWwindow not part of window layer stack.");
+        return std::numeric_limits<size_t>::max();
     }
 }

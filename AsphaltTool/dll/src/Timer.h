@@ -1,7 +1,6 @@
 #pragma once
 
 //std
-#include <cstdint>
 #include <chrono>
 
 #include "Units.h"
@@ -38,7 +37,6 @@ namespace AsphaltDLL
 
             void Continue() noexcept
             {
-
                 if(m_state == TimerState::UNINITIALIZED) 
                 {
                     Restart();

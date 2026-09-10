@@ -49,8 +49,8 @@ namespace AsphaltTas
         uint32_t GetFrameIntervalMicros() const noexcept;
         void SetFrameIntervalMicros(uint32_t interval) noexcept;
 
-        static bool SerializeReplayToFile(const Replay& replay, const std::string& path) noexcept;
-        [[nodiscard]] static Replay DeserializeReplayFromFile(const std::string& file_path) noexcept;
+        static bool SerializeReplayToFile(const Replay& replay, const std::filesystem::path& path) noexcept;
+        [[nodiscard]] static Replay DeserializeReplayFromFile(const std::filesystem::path& file_path) noexcept;
 
         [[nodiscard]] static std::string SerializeReplayToString(const Replay& replay);
         [[nodiscard]] static Replay DeserializeReplayFromString(const std::string& replay_json);

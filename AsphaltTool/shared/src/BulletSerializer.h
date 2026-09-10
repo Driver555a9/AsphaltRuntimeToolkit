@@ -316,27 +316,27 @@ namespace BulletTypes
                 nlohmann::ordered_json shape_json;
                 bool serialize_success = false;
 
-                if (const BoxShape* box = SafeShapeCast<const BoxShape>(shape))
+                if (const BoxShape* box = shape->As<const BoxShape*>())
                 {
                     serialize_success = SerializeBox(shape_json, box);
                 }
-                else if (const SphereShape* sphere = SafeShapeCast<const SphereShape>(shape))
+                else if (const SphereShape* sphere = shape->As<const SphereShape*>())
                 {
                     serialize_success = SerializeSphere(shape_json, sphere);
                 }
-                else if (const CapsuleShape* capsule = SafeShapeCast<const CapsuleShape>(shape))
+                else if (const CapsuleShape* capsule = shape->As<const CapsuleShape*>())
                 {
                     serialize_success = SerializeCapsule(shape_json, capsule);
                 }
-                else if (const CylinderShape* cylinder = SafeShapeCast<const CylinderShape>(shape))
+                else if (const CylinderShape* cylinder = shape->As<const CylinderShape*>())
                 {
                     serialize_success = SerializeCylinder(shape_json, cylinder);
                 }
-                else if (const MultimaterialTriangleMeshShape* multimat = SafeShapeCast<const MultimaterialTriangleMeshShape>(shape))
+                else if (const MultimaterialTriangleMeshShape* multimat = shape->As<const MultimaterialTriangleMeshShape*>())
                 {
                     serialize_success = SerializeMultiMat(shape_json, binary_payload, multimat);
                 }
-                else if (const ScaledBvhTriangleMeshShape* scaledtri = SafeShapeCast<const ScaledBvhTriangleMeshShape>(shape))
+                else if (const ScaledBvhTriangleMeshShape* scaledtri = shape->As<const ScaledBvhTriangleMeshShape*>())
                 {
                     shape_json[Keys::ShapesRoot::SHAPE_TYPE] = scaledtri->m_shape_type;
                     shape_json[Keys::ShapesRoot::MARGIN]     = scaledtri->GetMargin();
@@ -353,7 +353,7 @@ namespace BulletTypes
                         }
                     }
                 }
-                else if (const CompoundShape* compound = SafeShapeCast<const CompoundShape>(shape))
+                else if (const CompoundShape* compound = shape->As<const CompoundShape*>())
                 {
                     shape_json[Keys::ShapesRoot::SHAPE_TYPE] = compound->m_shape_type;
                     shape_json[Keys::ShapesRoot::MARGIN]     = compound->GetMargin();
@@ -834,7 +834,7 @@ namespace BulletTypes
             return extracted_objects; 
         }
 
-        [[nodiscard]] inline std::vector<ExtractedObject> DeserializeObjectsFromFile(const std::string& path)
+        [[nodiscard]] inline std::vector<ExtractedObject> DeserializeObjectsFromFile(const std::filesystem::path& path)
         {
             std::ifstream file(path, std::ios::binary | std::ios::ate);
             if (!file) 
@@ -869,7 +869,7 @@ namespace BulletTypes
             return oss.str();
         }
 
-        inline void SerializeObjectsToFile(const std::vector<CollisionObject*>& objects, const std::string& path)
+        inline void SerializeObjectsToFile(const std::vector<CollisionObject*>& objects, const std::filesystem::path& path)
         {
             std::ofstream out(path.c_str(), std::ios::binary);
             if (!out.is_open()) 

@@ -13,9 +13,9 @@
 
 namespace CoreEngine::CommonUtility
 {
-    std::string ReadFileToString(const char* filepath) 
+    std::string ReadFileToString(const std::filesystem::path& filepath) 
     {
-        std::ifstream file(std::filesystem::path(filepath), std::ios::binary | std::ios::ate);
+        std::ifstream file(filepath, std::ios::binary | std::ios::ate);
         if (!file) {
             throw std::runtime_error("At CommonUtility::ReadFileToString(): Failed to open file");
         }
@@ -36,9 +36,9 @@ namespace CoreEngine::CommonUtility
         return content;
     }
 
-    void WriteStringToFile(const std::string& str, const char* filepath)
+    void WriteStringToFile(const std::string& str, const std::filesystem::path& filepath)
     {
-        std::ofstream file(std::filesystem::path(filepath), std::ios::binary | std::ios::trunc);
+        std::ofstream file(filepath, std::ios::binary | std::ios::trunc);
         if (!file) {
             throw std::runtime_error("At CommonUtility::WriteStringToFile(): Failed to open file for writing");
         }

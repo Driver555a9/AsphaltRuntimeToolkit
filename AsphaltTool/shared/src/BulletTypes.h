@@ -1,11 +1,28 @@
 #pragma once
 
+#ifndef __clang__
+    #ifdef _MSC_VER
+        #pragma warning(push)
+        #pragma warning(disable : 4624) // Warns for implicit destructor deletion via inheritance - we do this several times
+    #endif
+#endif
+
+#if defined(_MSC_VER)
+    #if _MSVC_LANG < 202302L
+        #warning "BulletTypes header requires C++23 or later"
+    #endif
+#elif __cplusplus < 202302L
+    #warning "BulletTypes header requires C++23 or later"
+#endif
+
 #define NOMINMAX
+#include <utility>
 #include <cassert>
 #include <cstdint>
 #include <cstddef>
 #include <format>
 #include <type_traits>
+#include <vector>
 
 #ifdef HAS_GET_MAIN_MODULE_FUNCTION
     extern uintptr_t GetMainModule() noexcept;
@@ -50,9 +67,10 @@ namespace BulletTypes
     struct alignas(16) Vector3
     {
         float x{}, y{}, z{};
-        Vector3() noexcept : x(), y(), z() {}
-        Vector3(float uniform_value) : x(uniform_value), y(uniform_value), z(uniform_value) {}
-        Vector3(float x, float y, float z) : x(x), y(y), z(z) {}
+        Vector3() noexcept = default;
+        Vector3(float val) noexcept : x(val), y(val), z(val) {} 
+        Vector3(const UnalignedVector3& other) noexcept : x(other.x), y(other.y), z(other.z) {}
+        Vector3(float ax, float ay, float az) noexcept : x(ax), y(ay), z(az) {}
         [[nodiscard]] float* Data() { return &x; }
         [[nodiscard]] const float* Data() const { return &x; }
         [[nodiscard]] Vector3 operator+(const Vector3& other) const { return {x + other.x, y + other.y, z + other.z};}
@@ -102,6 +120,10 @@ namespace BulletTypes
     struct alignas(16) Vector4 
     { 
         float x{}, y{}, z{}, w{}; 
+        Vector4() noexcept = default;
+        Vector4(float val) noexcept : x(val), y(val), z(val), w(val) {} 
+        Vector4(const UnalignedVector4& other) noexcept : x(other.x), y(other.y), z(other.z), w(other.w) {}
+        Vector4(float ax, float ay, float az, float aw) noexcept : x(ax), y(ay), z(az), w(aw) {}
         [[nodiscard]] float* Data() noexcept { return &x; }
         [[nodiscard]] const float* Data() const noexcept { return &x; }
         [[nodiscard]] float& operator[](size_t i) noexcept { assert(i < 4); return reinterpret_cast<float*>(this)[i]; }
@@ -137,6 +159,8 @@ namespace BulletTypes
         [[nodiscard]] const float& At(size_t flat_index) const noexcept { assert(flat_index < 16); return reinterpret_cast<const float*>(this)[flat_index]; }
         [[nodiscard]] float* Data() noexcept { return reinterpret_cast<float*>(this); }
         [[nodiscard]] const float* Data() const noexcept { return reinterpret_cast<const float*>(this); }
+        void SetPosition(const UnalignedVector3& translation) noexcept { m_origin.x = translation.x; m_origin.y = translation.y; m_origin.z = translation.z; };
+        [[nodiscard]] UnalignedVector3 GetPosition() noexcept { return UnalignedVector3(m_origin.x, m_origin.y, m_origin.z); }
         void RotateX(float radians) noexcept { const float c = std::cos(radians); const float s = std::sin(radians); const UnalignedVector4 old_y = m_basis[1]; const UnalignedVector4 old_z = m_basis[2]; m_basis[1] = old_y * c + old_z * s; m_basis[2] = old_y * -s + old_z * c; }
         void RotateY(float radians) noexcept { const float c = std::cos(radians); const float s = std::sin(radians); const UnalignedVector4 old_x = m_basis[0]; const UnalignedVector4 old_z = m_basis[2]; m_basis[0] = old_x * c - old_z * s; m_basis[2] = old_x * s + old_z * c; }
         void RotateZ(float radians) noexcept { const float c = std::cos(radians); const float s = std::sin(radians); const UnalignedVector4 old_x = m_basis[0]; const UnalignedVector4 old_y = m_basis[1]; m_basis[0] = old_x * c + old_y * s; m_basis[1] = old_x * -s + old_y * c; }
@@ -156,19 +180,22 @@ namespace BulletTypes
         Vector4 m_basis[3];
         Vector4 m_origin;
         Transform() noexcept : m_basis{Vector4(1.0f, 0.0f, 0.0f, 0.0f), Vector4(0.0f, 1.0f, 0.0f, 0.0f),Vector4(0.0f, 0.0f, 1.0f, 0.0f)}, m_origin(0.0f, 0.0f, 0.0f, 1.0f) {}
+        Transform(const UnalignedTransform& other) noexcept : m_origin(other.m_origin) { m_basis[0] = other.m_basis[0]; m_basis[1] = other.m_basis[1]; m_basis[2] = other.m_basis[2];}
         [[nodiscard]] Vector4& operator[](size_t col) noexcept{ assert(col < 4); return (col < 3) ? m_basis[col] : m_origin; }
         [[nodiscard]] const Vector4& operator[](size_t col) const noexcept { assert(col < 4); return (col < 3) ? m_basis[col] : m_origin; }
         [[nodiscard]] float& At(size_t flat_index) noexcept { assert(flat_index < 16); return reinterpret_cast<float*>(this)[flat_index]; }
         [[nodiscard]] const float& At(size_t flat_index) const noexcept { assert(flat_index < 16); return reinterpret_cast<const float*>(this)[flat_index]; }
         [[nodiscard]] float* Data() noexcept { return reinterpret_cast<float*>(this); }
         [[nodiscard]] const float* Data() const noexcept { return reinterpret_cast<const float*>(this); }
+        void SetPosition(const Vector3& translation) noexcept { m_origin.x = translation.x; m_origin.y = translation.y; m_origin.z = translation.z; };
+        [[nodiscard]] Vector3 GetPosition() noexcept { return Vector3(m_origin.x, m_origin.y, m_origin.z); }
         void RotateX(float radians) noexcept { const float c = std::cos(radians); const float s = std::sin(radians); const Vector4 old_y = m_basis[1]; const Vector4 old_z = m_basis[2]; m_basis[1] = old_y * c + old_z * s; m_basis[2] = old_y * -s + old_z * c; }
         void RotateY(float radians) noexcept { const float c = std::cos(radians); const float s = std::sin(radians); const Vector4 old_x = m_basis[0]; const Vector4 old_z = m_basis[2]; m_basis[0] = old_x * c - old_z * s; m_basis[2] = old_x * s + old_z * c; }
         void RotateZ(float radians) noexcept { const float c = std::cos(radians); const float s = std::sin(radians); const Vector4 old_x = m_basis[0]; const Vector4 old_y = m_basis[1]; m_basis[0] = old_x * c + old_y * s; m_basis[1] = old_x * -s + old_y * c; }
         void RotateWorldX(float radians) noexcept { const float c = std::cos(radians); const float s = std::sin(radians); for (int i = 0; i < 3; ++i) { const float y = m_basis[i].y; const float z = m_basis[i].z; m_basis[i].y = y * c - z * s; m_basis[i].z = y * s + z * c; } const float y = m_origin.y; const float z = m_origin.z; m_origin.y = y * c - z * s; m_origin.z = y * s + z * c; }
         void RotateWorldY(float radians) noexcept { const float c = std::cos(radians); const float s = std::sin(radians); for (int i = 0; i < 3; ++i) { const float x = m_basis[i].x; const float z = m_basis[i].z; m_basis[i].x = x * c + z * s; m_basis[i].z = -x * s + z * c; } const float x = m_origin.x; const float z = m_origin.z; m_origin.x = x * c + z * s; m_origin.z = -x * s + z * c;}
         void RotateWorldZ(float radians) noexcept { const float c = std::cos(radians); const float s = std::sin(radians); for (int i = 0; i < 3; ++i) { const float x = m_basis[i].x; const float y = m_basis[i].y; m_basis[i].x = x * c - y * s; m_basis[i].y = x * s + y * c; } const float x = m_origin.x; const float y = m_origin.y; m_origin.x = x * c - y * s; m_origin.y = x * s + y * c;}
-        [[nodiscard]] Vector3 operator*(const Vector3& v) const noexcept { return {  m_basis[0].x * v.x + m_basis[1].x * v.y + m_basis[2].x * v.z + m_origin.x, m_basis[0].y * v.x + m_basis[1].y * v.y + m_basis[2].y * v.z + m_origin.y, m_basis[0].z * v.x + m_basis[1].z * v.y + m_basis[2].z * v.z + m_origin.z }; }
+        [[nodiscard]] Vector3 operator*(const Vector3& v) const noexcept { return { m_basis[0].x * v.x + m_basis[1].x * v.y + m_basis[2].x * v.z + m_origin.x, m_basis[0].y * v.x + m_basis[1].y * v.y + m_basis[2].y * v.z + m_origin.y, m_basis[0].z * v.x + m_basis[1].z * v.y + m_basis[2].z * v.z + m_origin.z }; }
         [[nodiscard]] bool operator==(const Transform& other) const noexcept { return m_basis[0] == other.m_basis[0] && m_basis[1] == other.m_basis[1] && m_basis[2] == other.m_basis[2] && m_origin == other.m_origin; }
         [[nodiscard]] bool operator!=(const Transform& other) const noexcept { return !(*this == other); }
         [[nodiscard]] std::string ToString() const noexcept { return std::format("[{:.3f}, {:.3f}, {:.3f}, {:.3f}, ""{:.3f}, {:.3f}, {:.3f}, {:.3f}, ""{:.3f}, {:.3f}, {:.3f}, {:.3f}, ""{:.3f}, {:.3f}, {:.3f}, {:.3f}]",(*this)[0].x, (*this)[0].y, (*this)[0].z, (*this)[0].w,(*this)[1].x, (*this)[1].y, (*this)[1].z, (*this)[1].w,(*this)[2].x, (*this)[2].y, (*this)[2].z, (*this)[2].w,(*this)[3].x, (*this)[3].y, (*this)[3].z, (*this)[3].w);}
@@ -207,10 +234,12 @@ namespace BulletTypes
     {
         int     m_size;
         int     m_capacity;
-        uint8_t m_unknown[4];
+        uint8_t m_pad[4];
         T*      m_data;
         bool    m_owns_memory;
-        uint8_t m_tail_pad[7]; 
+        uint8_t m_tail_pad[7];
+        AlignedObjectArray()  noexcept = delete;
+        ~AlignedObjectArray() noexcept = delete;
         T& operator[](int i) { assert(i < m_size && m_size >= 0 && "You are accessing out of bounds in an AlignedObjectArray!"); return m_data[i]; }
         const T& operator[](int i) const { assert(i < m_size && m_size >= 0 && "You are accessing out of bounds in an AlignedObjectArray!"); return m_data[i]; }
     };
@@ -220,6 +249,7 @@ namespace BulletTypes
     ////////////////////////////////////////////
     // Complex physics types
     ////////////////////////////////////////////
+    // Game world, non standard bullet, should be verified
     struct RaycastOutput
     {
         void*            m_hit_body_ptr {}; // Not a Collision object? Unclear what it points to
@@ -289,6 +319,8 @@ namespace BulletTypes
         INVALID_SHAPE_PROXYTYPE,
         MAX_BROADPHASE_COLLISION_TYPES
     };
+    static_assert(BroadphaseNativeTypes::COMPOUND_SHAPE_PROXYTYPE              == 31);
+    static_assert(BroadphaseNativeTypes::MULTIMATERIAL_TRIANGLE_MESH_PROXYTYPE == 26);
 
     enum class PHY_ScalarType
     {
@@ -299,6 +331,17 @@ namespace BulletTypes
         PHY_FIXEDPOINT88,
         PHY_UCHAR
     };
+
+    //Forward
+    class CollisionShape;
+    class BoxShape;
+    class SphereShape;
+    class CapsuleShape;
+    class ScaledBvhTriangleMeshShape;
+    class MultimaterialTriangleMeshShape;
+    class CompoundShape;
+    class CylinderShape;
+    inline void DestroyShapeWithDependencies(CollisionShape* shape) noexcept;
 
     struct alignas(16) CollisionShape
     {
@@ -312,10 +355,55 @@ namespace BulletTypes
         ////////////////////////////////////
         // Dynamic dispatch methods
         ////////////////////////////////////
-        ~CollisionShape() noexcept
+        ~CollisionShape() noexcept = delete;
+
+        template <typename TTarget>
+        requires std::is_base_of_v<CollisionShape, std::remove_cv_t<std::remove_pointer_t<TTarget>>>
+        [[nodiscard]] constexpr bool Is() const noexcept
         {
-            using Fn = void(__fastcall *)(CollisionShape* p_this, char should_free);
-            reinterpret_cast<Fn*>(m_vtable_ptr)[0](this, 1);
+            using Target = std::remove_cv_t<std::remove_pointer_t<TTarget>>;
+            if      constexpr (std::is_same_v<Target, BoxShape>)                       return m_shape_type == BroadphaseNativeTypes::BOX_SHAPE_PROXYTYPE;
+            else if constexpr (std::is_same_v<Target, SphereShape>)                    return m_shape_type == BroadphaseNativeTypes::SPHERE_SHAPE_PROXYTYPE;
+            else if constexpr (std::is_same_v<Target, CapsuleShape>)                   return m_shape_type == BroadphaseNativeTypes::CAPSULE_SHAPE_PROXYTYPE;
+            else if constexpr (std::is_same_v<Target, ScaledBvhTriangleMeshShape>)     return m_shape_type == BroadphaseNativeTypes::SCALED_TRIANGLE_MESH_SHAPE_PROXYTYPE;
+            else if constexpr (std::is_same_v<Target, MultimaterialTriangleMeshShape>) return m_shape_type == BroadphaseNativeTypes::MULTIMATERIAL_TRIANGLE_MESH_PROXYTYPE;
+            else if constexpr (std::is_same_v<Target, CompoundShape>)                  return m_shape_type == BroadphaseNativeTypes::COMPOUND_SHAPE_PROXYTYPE;
+            else if constexpr (std::is_same_v<Target, CylinderShape>)                  return m_shape_type == BroadphaseNativeTypes::CYLINDER_SHAPE_PROXYTYPE;
+            else static_assert(false, "Unsupported Shape Type for CollisionShape::Is()");
+        }
+
+        template <typename TTarget>
+        requires std::is_base_of_v<CollisionShape, std::remove_cv_t<std::remove_pointer_t<TTarget>>>
+        [[nodiscard]] constexpr TTarget As() noexcept
+        {
+            static_assert(std::is_pointer_v<TTarget>, "Target must be a pointer type");
+            return Is<std::remove_cv_t<std::remove_pointer_t<TTarget>>>() ? reinterpret_cast<TTarget>(this) : nullptr;
+        }
+
+        template <typename TTarget>
+        requires std::is_base_of_v<CollisionShape, std::remove_cv_t<std::remove_pointer_t<TTarget>>>
+        [[nodiscard]] constexpr TTarget As() const noexcept
+        {
+            static_assert(std::is_pointer_v<TTarget>, "Target must be a pointer type");
+            static_assert(std::is_const_v<std::remove_pointer_t<TTarget>>, "const CollisionShape::As requires a const-qualified target");
+            return Is<std::remove_cv_t<std::remove_pointer_t<TTarget>>>() ? reinterpret_cast<TTarget>(this): nullptr;
+        }
+
+        void DestroyWithDependencies() noexcept
+        {
+            DestroyShapeWithDependencies(this);
+        }
+
+        //Must not be called on "actual" game objects!
+        void CallDestructor(bool should_free) noexcept
+        {
+            using Fn = void(__fastcall *)(CollisionShape* p_this, bool should_free);
+            reinterpret_cast<Fn*>(m_vtable_ptr)[0](this, false);
+
+            if (should_free)
+            {
+                ::operator delete(this); //We always use our own operator delete - game and ours incompatible
+            }
         }
 
         void GetAABB(Transform& transform, Vector3& aabb_min_out, Vector3& aabb_max_out) const noexcept 
@@ -495,7 +583,6 @@ namespace BulletTypes
         }
     };
 
-
     struct alignas(16) BoxShape : public PolyhedralConvexShape // USED IN GAME
     {
     #ifdef HAS_GET_MAIN_MODULE_FUNCTION 
@@ -563,6 +650,19 @@ namespace BulletTypes
     {
         void**  m_vtable_ptr;
         Vector3 m_scaling {1,1,1};
+
+        ~StridingMeshInterface() noexcept = delete;
+
+        void CallDestructor(bool should_free) noexcept
+        {
+            using Fn = void(__fastcall *)(StridingMeshInterface* p_this, bool should_free);
+            reinterpret_cast<Fn*>(m_vtable_ptr)[0](this, false);
+
+            if (should_free)
+            {
+                ::operator delete(this); //We always use our own operator delete - game and ours incompatible
+            }
+        }
 
         void InternalProcessAllTriangles(TriangleCallback* callback, const Vector3& aabbMin, const Vector3& aabbMax) const noexcept
         {
@@ -960,28 +1060,48 @@ namespace BulletTypes
     };
     static_assert(offsetof(CompoundShape, m_children) == 84);
 
-    template <typename TTarget>
-    requires std::is_base_of<CollisionShape, TTarget>::value
-    [[nodiscard]] constexpr inline bool IsShapeType(const CollisionShape* shape) noexcept
+    inline void DestroyShapeWithDependencies(CollisionShape* shape) noexcept
     {
-        using CleanTarget = std::remove_cv_t<TTarget>;
-        if (!shape) return false;
-        else if constexpr (std::is_same_v<CleanTarget, BoxShape>) return shape->m_shape_type == BroadphaseNativeTypes::BOX_SHAPE_PROXYTYPE;
-        else if constexpr (std::is_same_v<CleanTarget, SphereShape>) return shape->m_shape_type == BroadphaseNativeTypes::SPHERE_SHAPE_PROXYTYPE;
-        else if constexpr (std::is_same_v<CleanTarget, CapsuleShape>) return shape->m_shape_type == BroadphaseNativeTypes::CAPSULE_SHAPE_PROXYTYPE;
-        else if constexpr (std::is_same_v<CleanTarget, ScaledBvhTriangleMeshShape>) return shape->m_shape_type == BroadphaseNativeTypes::SCALED_TRIANGLE_MESH_SHAPE_PROXYTYPE;
-        else if constexpr (std::is_same_v<CleanTarget, MultimaterialTriangleMeshShape>) return shape->m_shape_type == BroadphaseNativeTypes::MULTIMATERIAL_TRIANGLE_MESH_PROXYTYPE;
-        else if constexpr (std::is_same_v<CleanTarget, CompoundShape>) return shape->m_shape_type == BroadphaseNativeTypes::COMPOUND_SHAPE_PROXYTYPE;
-        else if constexpr (std::is_same_v<CleanTarget, CylinderShape>) return shape->m_shape_type == BroadphaseNativeTypes::CYLINDER_SHAPE_PROXYTYPE;
-        else return false;
-    }
+        if (!shape) return;
 
-    template <typename TTarget>
-    requires std::is_base_of<CollisionShape, TTarget>::value
-    [[nodiscard]] constexpr inline TTarget* SafeShapeCast(const CollisionShape* shape) noexcept
-    {
-        if (IsShapeType<TTarget>(shape)) return reinterpret_cast<TTarget*>(shape);
-        else return nullptr;
+        constexpr bool SHOULD_FREE_MEMORY = true;
+        switch (shape->m_shape_type)
+        {
+            case BroadphaseNativeTypes::MULTIMATERIAL_TRIANGLE_MESH_PROXYTYPE:
+            {
+                auto* multi = shape->As<MultimaterialTriangleMeshShape*>();
+                StridingMeshInterface* interface = multi->m_mesh_interface;
+                multi->CallDestructor(SHOULD_FREE_MEMORY);
+                if (interface) interface->CallDestructor(SHOULD_FREE_MEMORY);
+                break;
+            }
+            case BroadphaseNativeTypes::SCALED_TRIANGLE_MESH_SHAPE_PROXYTYPE:
+            {
+                auto* scaled = shape->As<ScaledBvhTriangleMeshShape*>();
+                BvhTriangleMeshShape* inner = scaled->m_bvh_tri_mesh_shape;
+                scaled->CallDestructor(SHOULD_FREE_MEMORY);
+                if (inner) DestroyShapeWithDependencies(inner);
+                break;
+            }
+            case BroadphaseNativeTypes::COMPOUND_SHAPE_PROXYTYPE:
+            {
+                auto* compound = shape->As<CompoundShape*>();
+                std::vector<CollisionShape*> children;
+                children.reserve(compound->m_children.m_size);
+                for (int i = 0; i < compound->m_children.m_size; ++i)
+                    children.push_back(compound->m_children[i].m_child_shape);
+
+                compound->CallDestructor(SHOULD_FREE_MEMORY);
+
+                for (CollisionShape* child : children)
+                    DestroyShapeWithDependencies(child);
+                break;
+            }
+
+            default:
+                shape->CallDestructor(SHOULD_FREE_MEMORY);
+                break;
+        }
     }
 
     struct MotionState
@@ -1003,6 +1123,9 @@ namespace BulletTypes
 
     //fwd
     struct BroadphaseProxy;
+    struct RigidBody;
+    struct GhostObject;
+
     struct alignas(16) CollisionObject
     {
         enum CollisionObjectTypes
@@ -1052,9 +1175,43 @@ namespace BulletTypes
         {
             void* storage = operator new(sizeof(CollisionObject));
             using Fn = CollisionObject*(*)(void*);
-            return reinterpret_cast<Fn>(GetMainModule() + 0x63578F8)(storage);
+            CollisionObject* obj = reinterpret_cast<Fn>(GetMainModule() + 0x63578F8)(storage);
+            obj->SetIsUsingDllAllocator();
+            return obj;
         }
     #endif
+
+        ~CollisionObject() noexcept = delete;
+
+        void DestroyWithDependencies() noexcept
+        {
+            BulletTypes::CollisionShape* shape = m_collision_shape_ptr;
+            constexpr bool should_free = true;
+            CallDestructor(should_free);
+            if (shape)
+            {
+                shape->DestroyWithDependencies();
+            }
+        }
+
+        bool CheckCollideWithOverride(const CollisionObject* co) const noexcept
+        {
+            using Fn = bool(__fastcall *)(const CollisionObject* p_this, const CollisionObject* co);
+            return reinterpret_cast<Fn*>(m_vtable_ptr)[0](this, co);
+        }
+
+        void CallDestructor(bool should_free) noexcept
+        {
+            using Fn = void(__fastcall *)(CollisionObject* p_this, bool should_free);
+            const bool use_game_free = should_free && ! IsUsingDllAllocator();
+            const bool use_dll_free  = should_free &&   IsUsingDllAllocator();
+            reinterpret_cast<Fn*>(m_vtable_ptr)[1](this, use_game_free);
+
+            if (use_dll_free)
+            {
+                ::operator delete(this);
+            }
+        }
 
         void SetCollisionShape(CollisionShape* shape) noexcept
         {
@@ -1062,25 +1219,64 @@ namespace BulletTypes
             reinterpret_cast<Fn*>(m_vtable_ptr)[2](this, shape);
         }
         
-        [[nodiscard]] bool IsRigidBody() noexcept
+        [[nodiscard]] bool IsRigidBody() const noexcept
         {
             return m_internal_type == CO_RIGID_BODY;
         }
 
-        [[nodiscard]] bool IsGhostObject() noexcept
+        [[nodiscard]] bool IsGhostObject() const noexcept
         {
             return m_internal_type == CO_GHOST_OBJECT;
         }
 
+        template <typename TTarget>
+        requires std::is_base_of_v<CollisionObject, std::remove_cv_t<std::remove_pointer_t<TTarget>>>
+        [[nodiscard]] constexpr bool Is() const noexcept
+        {
+            using Target = std::remove_cv_t<std::remove_pointer_t<TTarget>>;
+            if      constexpr (std::is_same_v<Target, RigidBody>)              return IsRigidBody();
+            else if constexpr (std::is_same_v<Target, GhostObject>)            return IsGhostObject();
+            else                                                               return false;
+        }
+
+        template <typename TTarget>
+        requires std::is_base_of_v<CollisionObject, std::remove_cv_t<std::remove_pointer_t<TTarget>>>
+        [[nodiscard]] constexpr TTarget As() noexcept
+        {
+            static_assert(std::is_pointer_v<TTarget>, "Target must be a pointer type");
+            return Is<std::remove_cv_t<std::remove_pointer_t<TTarget>>>() ? reinterpret_cast<TTarget>(this) : nullptr;
+        }
+
+        template <typename TTarget>
+        requires std::is_base_of_v<CollisionObject, std::remove_cv_t<std::remove_pointer_t<TTarget>>>
+        [[nodiscard]] constexpr TTarget As() const noexcept
+        {
+            static_assert(std::is_pointer_v<TTarget>, "Target must be a pointer type");
+            static_assert(std::is_const_v<std::remove_pointer_t<TTarget>>, "const CollisionObject::As requires a const-qualified target");
+            return Is<std::remove_cv_t<std::remove_pointer_t<TTarget>>>() ? reinterpret_cast<TTarget>(this): nullptr;
+        }
+
         void SetCustomHackedObject() noexcept
         {
-            m_extension_pointer = reinterpret_cast<void*>(1uz);
+            const uint64_t val  = std::bit_cast<uint64_t>(m_extension_pointer);
+            m_extension_pointer = std::bit_cast<void*>(val | 0x1);
             m_collision_flags |= BulletTypes::CF_DISABLE_VISUALIZE_OBJECT; // Prevents certain crashes
         }
 
-        [[nodiscard]] bool IsCustomHackedObject() noexcept
+        [[nodiscard]] bool IsCustomHackedObject() const noexcept
         {
-            return std::bit_cast<uintptr_t>(m_extension_pointer) == 1;
+            return std::bit_cast<uintptr_t>(m_extension_pointer) & 0x1;
+        }
+
+        [[nodiscard]] bool IsUsingDllAllocator() const noexcept
+        {
+            return std::bit_cast<uintptr_t>(m_extension_pointer) & 0x2;
+        }
+    protected:
+        void SetIsUsingDllAllocator() noexcept
+        {
+            const uint64_t val  = std::bit_cast<uint64_t>(m_extension_pointer);
+            m_extension_pointer = std::bit_cast<void*>(val | 0x2);
         }
     };
     static_assert(offsetof(CollisionObject, m_transform_matrix)     == 0x20);
@@ -1166,7 +1362,9 @@ namespace BulletTypes
         {
             void* storage = operator new(sizeof(RigidBody));
             using Fn = RigidBody*(*)(void*, const RigidBodyConstructionInfo&);
-            return reinterpret_cast<Fn>(GetMainModule() + 0x63525A8)(storage, construction_info);
+            RigidBody* rb = reinterpret_cast<Fn>(GetMainModule() + 0x63525A8)(storage, construction_info);
+            rb->SetIsUsingDllAllocator();
+            return rb;
         }
     #endif
     };
@@ -1357,9 +1555,11 @@ namespace BulletTypes
         bool m_force_update_all_aabbs;  
         uint8_t m_pad_A9[7];
 
-        ~CollisionWorld() noexcept
+        ~CollisionWorld() noexcept = delete;
+
+        void CallDestructor() noexcept
         {
-            using Fn = void(__fastcall *)(CollisionWorld* p_this, char should_free);
+            using Fn = void(__fastcall *)(CollisionWorld* p_this, bool should_free);
             reinterpret_cast<Fn*>(m_vtable_ptr)[0](this, 1);
         }
 
@@ -1655,52 +1855,113 @@ namespace BulletTypes
     static_assert(offsetof(DiscreteDynamicsWorld, m_gravity) == 0x1C0);
     static_assert(offsetof(DiscreteDynamicsWorld, m_non_static_rigid_bodies.m_size) == 0x1A4);
 
-    [[nodiscard]] inline BulletTypes::UnalignedTransform ComposeBulletTransforms(const BulletTypes::UnalignedTransform& parent, const BulletTypes::UnalignedTransform& child) noexcept
+    ////////// If this grows it may be moved to its own header - simple utilities that interact directly with bullet to e.g. manage lifetime automatically
+    namespace Custom
     {
-        BulletTypes::UnalignedTransform result{};
-
-        const auto Dot3 = [](const BulletTypes::UnalignedVector4& a, const BulletTypes::UnalignedVector4& b) -> float
+        template <typename T>
+        class HeapArray
         {
-            return a.x * b.x + a.y * b.y + a.z * b.z;
+        public:
+            HeapArray() noexcept = default;
+            explicit HeapArray(size_t size) noexcept : m_data(std::make_unique<T[]>(size)), m_size(size) {}
+            explicit HeapArray(HeapArray&& other) noexcept : m_data(std::move(other.m_data)) { other.m_data = nullptr; m_size = std::exchange(other.m_size, 0); }
+            HeapArray& operator=(HeapArray&& other) noexcept 
+            {
+                if (this == std::addressof(other)) return *this;
+                m_data       = std::move(other.m_data);
+                other.m_data = nullptr;
+                m_size       = std::exchange(other.m_size, 0);
+                return *this;
+            }
+            HeapArray& operator=(const HeapArray&) = delete;
+            HeapArray(const HeapArray&) = delete;
+            ~HeapArray() noexcept = default;
+            T*       Data()       noexcept { return m_data.get(); }
+            const T* Data() const noexcept { return m_data.get(); }
+            size_t   Size() const noexcept { return m_size; }
+            T&       operator[](size_t i)       noexcept { assert( i < Size() && "You're accessing out of bounds in a HeapArray."); return m_data[i]; }
+            const T& operator[](size_t i) const noexcept { assert( i < Size() && "You're accessing out of bounds in a HeapArray."); return m_data[i]; }
+        private:
+            std::unique_ptr<T[]> m_data = nullptr;
+            size_t m_size = 0;
         };
 
-        for (int col = 0; col < 3; ++col)
+        class OwningCustomObjectWrapper
         {
-            auto& out = result[col];
-
-            for (int row = 0; row < 3; ++row)
+        public:
+            struct OwnedBuffers
             {
-                BulletTypes::UnalignedVector4 parent_row
+                HeapArray<float>   m_vertices_array;
+                HeapArray<int>     m_indices_array;
+                HeapArray<uint8_t> m_material_id_array;
+            };
+            explicit OwningCustomObjectWrapper(BulletTypes::CollisionObject* obj, OwnedBuffers buffers) noexcept : m_owned_buffers(std::move(buffers)), m_collision_object(obj) {}
+            ~OwningCustomObjectWrapper() noexcept 
+            { 
+                if (m_collision_object) 
+                { 
+                    m_collision_object->DestroyWithDependencies(); 
+                    m_collision_object = nullptr; 
+                } 
+            }
+            BulletTypes::CollisionObject* GetObject() noexcept { return m_collision_object; }
+        private:
+            OwnedBuffers m_owned_buffers;
+            BulletTypes::CollisionObject* m_collision_object  = nullptr;
+        };
+
+        [[nodiscard]] inline BulletTypes::UnalignedTransform ComposeBulletTransforms(const BulletTypes::UnalignedTransform& parent, const BulletTypes::UnalignedTransform& child) noexcept
+        {
+            BulletTypes::UnalignedTransform result{};
+
+            const auto Dot3 = [](const BulletTypes::UnalignedVector4& a, const BulletTypes::UnalignedVector4& b) -> float
+            {
+                return a.x * b.x + a.y * b.y + a.z * b.z;
+            };
+
+            for (int col = 0; col < 3; ++col)
+            {
+                auto& out = result[col];
+
+                for (int row = 0; row < 3; ++row)
                 {
-                    parent[0].x, parent[1].x, parent[2].x, 0.0f
-                };
+                    BulletTypes::UnalignedVector4 parent_row
+                    {
+                        parent[0].x, parent[1].x, parent[2].x, 0.0f
+                    };
 
-                if (row == 1)
-                    parent_row = { parent[0].y, parent[1].y, parent[2].y, 0.0f };
-                else if (row == 2)
-                    parent_row = { parent[0].z, parent[1].z, parent[2].z, 0.0f };
+                    if (row == 1)
+                        parent_row = { parent[0].y, parent[1].y, parent[2].y, 0.0f };
+                    else if (row == 2)
+                        parent_row = { parent[0].z, parent[1].z, parent[2].z, 0.0f };
 
-                const auto& childCol = child[col];
+                    const auto& childCol = child[col];
 
-                float value = Dot3(parent_row, childCol);
+                    float value = Dot3(parent_row, childCol);
 
-                if (row == 0) out.x = value;
-                else if (row == 1) out.y = value;
-                else out.z = value;
+                    if (row == 0) out.x = value;
+                    else if (row == 1) out.y = value;
+                    else out.z = value;
+                }
+
+                out.w = 0.0f;
             }
 
-            out.w = 0.0f;
+            const auto& childPos = child[3];
+            const auto& parentPos = parent[3];
+
+            result[3].x = parent[0].x * childPos.x + parent[1].x * childPos.y + parent[2].x * childPos.z + parentPos.x;
+            result[3].y = parent[0].y * childPos.x + parent[1].y * childPos.y + parent[2].y * childPos.z + parentPos.y;
+            result[3].z = parent[0].z * childPos.x + parent[1].z * childPos.y + parent[2].z * childPos.z + parentPos.z;
+            result[3].w = 1.0f;
+
+            return result;
         }
-
-        const auto& childPos = child[3];
-        const auto& parentPos = parent[3];
-
-        result[3].x = parent[0].x * childPos.x + parent[1].x * childPos.y + parent[2].x * childPos.z + parentPos.x;
-        result[3].y = parent[0].y * childPos.x + parent[1].y * childPos.y + parent[2].y * childPos.z + parentPos.y;
-        result[3].z = parent[0].z * childPos.x + parent[1].z * childPos.y + parent[2].z * childPos.z + parentPos.z;
-        result[3].w = 1.0f;
-
-        return result;
     }
-
 }
+
+#ifndef __clang__
+    #ifdef _MSC_VER
+        #pragma warning(pop) 
+    #endif
+#endif

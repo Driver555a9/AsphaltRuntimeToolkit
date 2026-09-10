@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -16,21 +17,156 @@
 
 #include <unordered_map>
 #include <fstream>
-#include <ranges>
 
 namespace AsphaltDLL
 {
     namespace Tests
     {
-        void LoadCustomTrack() noexcept
+        void LoadCustomTrack(const std::filesystem::path& path) noexcept
         {
+            if (! Utility::EqualsAny(GameDLLState::g_current_state.m_meta_data.m_race_status_state, Communication::DllOut::RaceStatusState::IN_RACE
+                                                                                                  , Communication::DllOut::RaceStatusState::IN_PRE_RACE_CINEMATIC))
+            {
+                return;
+            } 
+            
+            static BulletTypes::DiscreteDynamicsWorld* last_world = nullptr;
             BulletTypes::DiscreteDynamicsWorld* world = reinterpret_cast<BulletTypes::DiscreteDynamicsWorld*>(
                 GameDLLState::g_current_state.m_resolved_addresses.m_discrete_dynamics_world_instance_address
             );
 
-            static bool once = false;
-            if (!once && world)
+            if (last_world == world || !world)
             {
+                return;
+            }
+
+            last_world = world;
+
+            static std::vector<std::unique_ptr<BulletTypes::Custom::OwningCustomObjectWrapper>> s_custom_collision_objects;
+            // Clear will run destructor of wrapper which destroys objects. 
+            // We only get here if last world != current world, thus previous world already destroyed - safe to destroy rigidbodies
+            s_custom_collision_objects.clear();
+
+            //// Copy valid user object from main map to avoid crash
+            void* user_ptr_copy = nullptr;
+            for (int i = 0; i < world->m_rigid_bodies.m_size; ++i)
+            {
+                BulletTypes::RigidBody* body = world->m_rigid_bodies.m_data[i];
+
+                if (!body || !body->m_broadphase_proxy_ptr) continue;
+
+                float width = body->m_broadphase_proxy_ptr->m_aabb_max.x - body->m_broadphase_proxy_ptr->m_aabb_min.x;
+
+                if (width > 600.0f) // main map
+                {
+                    user_ptr_copy = body->m_user_object_pointer;
+                    break;
+                }
+            } 
+            assert(user_ptr_copy && "User ptr copy mustn't be null!");
+
+            const auto track_data = BulletTypes::Serializer::DeserializeObjectsFromFile(path.string());
+            
+            const BulletTypes::Vector3 NEW_TRACK_MOVED_ORIGIN = {0, 0, 300.0f};
+
+            for (const auto& extracted_obj : track_data)
+            {
+                if (extracted_obj.m_root_shape->m_shape_type == BulletTypes::BroadphaseNativeTypes::MULTIMATERIAL_TRIANGLE_MESH_PROXYTYPE)
+                {
+                    const BulletTypes::Serializer::MultiMatExtractedShape* multimat_shape_data = reinterpret_cast<const BulletTypes::Serializer::MultiMatExtractedShape*>(
+                        extracted_obj.m_root_shape.get()
+                    );
+
+                    BulletTypes::Custom::OwningCustomObjectWrapper::OwnedBuffers owned_buffers;
+
+                    const size_t num_triangles     = multimat_shape_data->m_triangles.size();
+                    const size_t num_vertices      = num_triangles * 3;
+                    const size_t num_vertex_floats = num_vertices  * 3;
+                    const size_t num_indices       = num_triangles * 3;
+
+                    owned_buffers.m_vertices_array    = BulletTypes::Custom::HeapArray<float>(num_vertex_floats);
+                    owned_buffers.m_indices_array     = BulletTypes::Custom::HeapArray<int>(num_indices);
+                    owned_buffers.m_material_id_array = BulletTypes::Custom::HeapArray<uint8_t>(num_triangles);
+
+                    size_t i_vertices = 0;
+                    size_t i_indices  = 0;
+                    for (const auto& bin_tri : multimat_shape_data->m_triangles)
+                    {
+                        const auto AddVertex = [&i_vertices, &i_indices, &owned_buffers](BulletTypes::Vector3 vec)
+                        {
+                            owned_buffers.m_vertices_array[i_vertices * 3 + 0] = vec.x;
+                            owned_buffers.m_vertices_array[i_vertices * 3 + 1] = vec.y;
+                            owned_buffers.m_vertices_array[i_vertices * 3 + 2] = vec.z;
+                            owned_buffers.m_indices_array[i_indices]           = static_cast<int>(i_vertices);
+                            i_indices++;
+                            i_vertices++;
+                        };
+                        AddVertex(bin_tri.m_vert_a);
+                        AddVertex(bin_tri.m_vert_b);
+                        AddVertex(bin_tri.m_vert_c);
+                    }
+
+                    constexpr uint8_t FORCED_MATERIAL_ID = 0; // 0 = ground on shanghai, TODO: improve for different locations etc
+                    std::memset(owned_buffers.m_material_id_array.Data(), FORCED_MATERIAL_ID, owned_buffers.m_material_id_array.Size());
+
+                    BulletTypes::TriangleIndexVertexMaterialArray* mesh_interface = BulletTypes::TriangleIndexVertexMaterialArray::ConstructForSurfaceIndices(
+                        static_cast<int>(num_triangles), owned_buffers.m_indices_array.Data(), 
+                        static_cast<int>(num_vertices), owned_buffers.m_vertices_array.Data(), owned_buffers.m_material_id_array.Data()
+                    );
+                    BulletTypes::MultimaterialTriangleMeshShape* multi_shape = BulletTypes::MultimaterialTriangleMeshShape::Construct(mesh_interface);
+                    BulletTypes::RigidBody* tri_mesh_rigidbody = BulletTypes::RigidBody::Construct(BulletTypes::RigidBodyConstructionInfo(0.0f, multi_shape));
+                    tri_mesh_rigidbody->m_transform_matrix     = extracted_obj.m_collision_object_info.m_world_transform;
+                    tri_mesh_rigidbody->m_transform_matrix.SetPosition(tri_mesh_rigidbody->m_transform_matrix.GetPosition() + NEW_TRACK_MOVED_ORIGIN);
+                    tri_mesh_rigidbody->m_user_object_pointer  = user_ptr_copy; // Anti-crash prevention
+                    tri_mesh_rigidbody->SetCustomHackedObject();
+
+                    s_custom_collision_objects.push_back(std::make_unique<BulletTypes::Custom::OwningCustomObjectWrapper>(tri_mesh_rigidbody, std::move(owned_buffers)));
+                    world->DynamicsWorld::AddRigidBody(tri_mesh_rigidbody);
+                }
+                ///// Other cases unsupported right now
+            }
+
+            ///// Removes all non custom static objects
+            /*std::vector<BulletTypes::RigidBody*> to_remove_rigidbodies;
+            for (int i = 0; i < world->m_rigid_bodies.m_size; ++i)
+            {
+                BulletTypes::RigidBody* body = world->m_rigid_bodies[i];
+                const float width = body->m_broadphase_proxy_ptr->m_aabb_max.x - body->m_broadphase_proxy_ptr->m_aabb_min.x;
+                if (! body->IsCustomHackedObject()) to_remove_rigidbodies.push_back(body);
+            }
+            for (auto& rb : to_remove_rigidbodies) { world->RemoveRigidBody(rb); } */
+
+            ///// Removes all non custom ghost objects
+            std::vector<BulletTypes::GhostObject*> to_remove_ghost_objects;
+            for (int i = 0; i < world->m_ghost_objects.m_size; ++i)
+            {
+                BulletTypes::GhostObject* ghost = world->m_ghost_objects[i];
+                if (! ghost->IsCustomHackedObject()) to_remove_ghost_objects.push_back(ghost);
+            }
+            for (auto& ghost : to_remove_ghost_objects) { world->RemoveCollisionObject(ghost); }
+
+            //// Move car to test position
+            for (int i = 0; i < world->m_non_static_rigid_bodies.m_size; ++i)
+            {
+                BulletTypes::RigidBody* dynamic_rb = world->m_non_static_rigid_bodies[i];
+                //dynamic_rb->m_transform_matrix.SetPosition(BulletTypes::Vector3(697, -357.5, 5) + NEW_TRACK_MOVED_ORIGIN);
+                dynamic_rb->m_linear_velocity = {0};
+                dynamic_rb->m_angular_velocity = {0};
+            }
+
+            world->UpdateAabbs(); 
+        }
+
+        void BuildFlatGroundScene() noexcept
+        {
+            static BulletTypes::DiscreteDynamicsWorld* last_world = nullptr;
+            BulletTypes::DiscreteDynamicsWorld* world = reinterpret_cast<BulletTypes::DiscreteDynamicsWorld*>(
+                GameDLLState::g_current_state.m_resolved_addresses.m_discrete_dynamics_world_instance_address
+            );
+
+            if (last_world != world && world)
+            {
+                last_world = world;
                 constexpr float half_x = 50000.0f;
                 constexpr float half_y = 50000.0f;
                 constexpr float half_z = 2.5f;
@@ -116,18 +252,22 @@ namespace AsphaltDLL
                 world->DynamicsWorld::AddRigidBody(ball_rigidbody);
 
                 ///// Removes all non custom static objects
+                std::vector<BulletTypes::RigidBody*> to_remove_rigidbodies;
                 for (int i = 0; i < world->m_rigid_bodies.m_size; ++i)
                 {
                     BulletTypes::RigidBody* body = world->m_rigid_bodies.m_data[i];
-                    if (! body->IsCustomHackedObject()) world->RemoveRigidBody(body);
+                    if (! body->IsCustomHackedObject()) to_remove_rigidbodies.push_back(body);
                 }
+                for (auto& rb : to_remove_rigidbodies) { world->RemoveRigidBody(rb); }
 
                 ///// Removes all non custom ghost objects
+                std::vector<BulletTypes::GhostObject*> to_remove_ghost_objects;
                 for (int i = 0; i < world->m_ghost_objects.m_size; ++i)
                 {
                     BulletTypes::GhostObject* ghost = world->m_ghost_objects.m_data[i];
-                    if (! ghost->IsCustomHackedObject()) world->RemoveCollisionObject(ghost);
+                    if (! ghost->IsCustomHackedObject()) to_remove_ghost_objects.push_back(ghost);
                 }
+                for (auto& ghost : to_remove_ghost_objects) { world->RemoveCollisionObject(ghost); }
 
                 /*for (int i = 0; i < world->m_non_static_rigid_bodies.m_size; ++i)
                 {
@@ -135,8 +275,6 @@ namespace AsphaltDLL
                 }*/
 
                 world->UpdateAabbs(); 
-
-                once = true;
             }
         }
 
@@ -324,7 +462,7 @@ namespace AsphaltDLL
                 BulletTypes::Transform trans {};
                 std::memcpy(trans.Data(), reinterpret_cast<void*>(racer_address + ComDllIn::WriteRacerState::OFFSET_TRANSFORM), sizeof(BulletTypes::Transform));
 
-                trans.m_origin = {1947.0f, 362, 40.9f};
+                trans.SetPosition(BulletTypes::Vector3{1947.0f, 362, 40.9f});
 
                 std::memcpy(reinterpret_cast<void*>(racer_address + ComDllIn::WriteRacerState::OFFSET_TRANSFORM), trans.Data(), sizeof(trans));
 
@@ -425,7 +563,7 @@ namespace AsphaltDLL
                 << "\nType:    " << shape->m_shape_type
                 << "\n";
 
-            if (const auto* box = BulletTypes::SafeShapeCast<const BulletTypes::BoxShape>(shape))
+            if (const auto* box = shape->As<BulletTypes::BoxShape*>())
             {
                 log << "\n////////////// BOX SHAPE //////////////"
                     << "\nSize: " << sizeof(BulletTypes::BoxShape)
@@ -434,7 +572,7 @@ namespace AsphaltDLL
                     << "\nMargin: " << box->m_collision_margin
                     << "\n";
             }
-            else if (const auto* scaled = BulletTypes::SafeShapeCast<const BulletTypes::ScaledBvhTriangleMeshShape>(shape))
+            else if (const auto* scaled = shape->As<BulletTypes::ScaledBvhTriangleMeshShape*>())
             {
                 log << "\n////////////// SCALED BVH TRIANGLE MESH //////////////"
                     << "\nSize: " << sizeof(BulletTypes::ScaledBvhTriangleMeshShape)
@@ -484,7 +622,7 @@ namespace AsphaltDLL
                     }
                 }
             }
-            else if (const auto* multi = BulletTypes::SafeShapeCast<const BulletTypes::MultimaterialTriangleMeshShape>(shape))
+            else if (const auto* multi = shape->As<BulletTypes::MultimaterialTriangleMeshShape*>())
             {
                 log << "\n////////////// MULTIMATERIAL TRIANGLE MESH //////////////"
                     << "\nSize: " << sizeof(BulletTypes::MultimaterialTriangleMeshShape)
@@ -586,7 +724,7 @@ namespace AsphaltDLL
                     }
                 }
             }
-            else if (const auto* compound = BulletTypes::SafeShapeCast<const BulletTypes::CompoundShape>(shape))
+            else if (const auto* compound = shape->As<BulletTypes::CompoundShape*>())
             {
                 log << "\n////////////// COMPOUND SHAPE //////////////"
                     << "\nSize: " << sizeof(BulletTypes::CompoundShape)
@@ -622,7 +760,7 @@ namespace AsphaltDLL
                     log << "  [!] Child count looks like garbage data. ABI mismatch likely around m_children offset.\n";
                 }
             }
-            else if (const auto* sphere = BulletTypes::SafeShapeCast<const BulletTypes::SphereShape>(shape))
+            else if (const auto* sphere = shape->As<BulletTypes::SphereShape*>())
             {
                 log << "\n////////////// SPHERE SHAPE //////////////"
                     << "\nSize: "

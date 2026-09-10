@@ -17,6 +17,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#undef WIN32_LEAN_AND_MEAN
 
 #include "BulletTypes.h"
 
@@ -38,10 +39,23 @@ namespace AsphaltDLL
         void ShutdownConsole() noexcept;
         void ClearConsole() noexcept;
 
+        std::ofstream& DONOTCALL_GetDebugLogInternal() noexcept;
         bool InitDebugLog(const std::filesystem::path& path) noexcept;
         void ShutdownDebugLog() noexcept;
-        void LogToFile(const std::string& str) noexcept;
-        void LogToFile(const char* str) noexcept;
+
+        template <typename T>
+        void LogToFile(const T& val) noexcept 
+        {
+            DONOTCALL_GetDebugLogInternal() << val << std::endl;
+        }
+
+        template <typename... Args>
+        void LogToFileMulti(Args&&... args) noexcept
+        {
+            auto& log = DONOTCALL_GetDebugLogInternal();
+            (log << ... << std::forward<Args>(args));
+            log << std::endl;
+        }
 
         inline std::string_view GetFileName(std::source_location location = std::source_location::current()) noexcept
         {

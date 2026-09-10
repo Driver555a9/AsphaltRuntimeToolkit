@@ -86,6 +86,7 @@ namespace AsphaltDLL
     void SetupHooks() noexcept
     {
         DetourFunctions::CameraUpdate::PatchEnableGameFovWriteInstruction();
+        DetourFunctions::AllowWreck::SetWreckIsAllowed(true);
 
         g_hooks.clear();
 
@@ -108,11 +109,12 @@ namespace AsphaltDLL
             EXPAND_HOOK(DetourFunctions::LocalRacerAccessPoint),
             EXPAND_HOOK(DetourFunctions::GetLocalRacerStruct),
             EXPAND_HOOK(DetourFunctions::CameraUpdate),
-            //EXPAND_HOOK(DetourFunctions::BarrelRollStabilization),
-            //EXPAND_HOOK(DetourFunctions::BarrelYawStabilization),
+            EXPAND_HOOK(DetourFunctions::NativeQueueRacerRespawn),
+            //EXPAND_HOOK(DetourFunctions::BarrelRollStabilization), // Deprecated
+            //EXPAND_HOOK(DetourFunctions::BarrelYawStabilization),  // Deprecated
             EXPAND_HOOK(DetourFunctions::FinalRacerTransformWriter),
             EXPAND_HOOK(DetourFunctions::OnWreckDeployBreakables),
-            //EXPAND_HOOK(DetourFunctions::OnRespawnButtonPressed), //CRASHES GAME ON REMOVE!
+            EXPAND_HOOK(DetourFunctions::OnRespawnButtonPressed),
             EXPAND_HOOK(DetourFunctions::GetPhysicsInterval),
             EXPAND_HOOK(DetourFunctions::OnBeginRaceFunction),
             EXPAND_HOOK(DetourFunctions::OnClickPlayFunction),
@@ -150,6 +152,7 @@ namespace AsphaltDLL
     void RemoveHooks() noexcept
     {
         DetourFunctions::CameraUpdate::PatchEnableGameFovWriteInstruction();
+        DetourFunctions::AllowWreck::SetWreckIsAllowed(true);
         
         for (auto it = g_hooks.rbegin(); it != g_hooks.rend(); ++it)
             it->Disable();

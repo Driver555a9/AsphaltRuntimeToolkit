@@ -6,6 +6,8 @@
 #include <vector>
 #include <optional>
 #include <functional>
+#include <mutex>
+#include <expected>
 
 //personal imports
 #include "core/layer/Layer.h"
@@ -14,9 +16,8 @@
 
 #include "core/application/Window.h"
 
+#include "core/utility/Assert.h"
 #include "core/utility/Units.h"
-
-#include "imgui/imgui.h"
 
 namespace CoreEngine
 {
@@ -44,7 +45,7 @@ namespace CoreEngine
         //////////////////////////////////////////////// 
         //--------- Public Methods
         //////////////////////////////////////////////// 
-        ~Application();
+        ~Application() noexcept;
         void Run() noexcept;
         void Stop() noexcept;
 
@@ -99,6 +100,18 @@ namespace CoreEngine
                 (**it).OnEvent(event);
             }
         }
+        
+        struct BasicTask
+        {
+            virtual ~BasicTask() noexcept {};
+            virtual void Execute() noexcept = 0;
+        };
+        void ScheduleTask(std::unique_ptr<BasicTask> task) noexcept 
+        { 
+            ENGINE_ASSERT(task && "You must not provide a nullptr to ScheduleTask");
+            std::scoped_lock<std::mutex> lock(m_schedule_tasks_mutex);
+            m_scheduled_tasks.push_back(std::move(task)); 
+        }
 
         void SetImGuiFontGlobal(const std::optional<std::string>& path) noexcept;
         const std::optional<std::string>& GetGlobalImGuiFontPath() noexcept;
@@ -116,7 +129,7 @@ namespace CoreEngine
 
     private:
         // Throws runtime err if not found
-        [[nodiscard]] Window::Handle FindWindowHandleFromGlfwWindow(GLFWwindow* window) const;
+        [[nodiscard]] std::optional<Window::Handle> FindWindowHandleFromGlfwWindow(GLFWwindow* window) const;
         // Throws runtime err if not found
         [[nodiscard]] size_t FindWindowLayerStackIndexFromWindowHandle(Window::Handle handle) const;
         //////////////////////////////////////////////// 
@@ -132,6 +145,9 @@ namespace CoreEngine
 
         std::vector<Window::Handle> m_window_layer_stacks_to_delete_next_frame;
         std::vector<std::pair<Window::WindowCreationConfig, std::vector<LayerFactory>>> m_window_creations_to_add_next_frame;
+
+        std::mutex m_schedule_tasks_mutex;
+        std::vector<std::unique_ptr<BasicTask>> m_scheduled_tasks;
 
         std::optional<std::string> m_active_global_font_path = std::nullopt;
         std::optional<GLFWimage>   m_active_window_icon      = std::nullopt;           

@@ -27,6 +27,7 @@
 #include "core/utility/Assert.h"
 #include "core/utility/CommonUtility.h"
 #include "core/utility/Performance.h"
+#include "core/utility/NativeFileDialogue.h"
 
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/ext/vector_float3.hpp"
@@ -119,7 +120,8 @@ namespace AsphaltTas
                 std::filesystem::copy_file(game_path.value() + "/" + Communication::DLL_DUMPED_TRACK_FILE_NAME, m_next_track_path, std::filesystem::copy_options::overwrite_existing, ec);
                 if (ec)
                 {
-                    ENGINE_ERROR_PRINT("Failed to move objects.TRACK file from game directory: " << ec.message());
+                    ENGINE_ERROR_PRINT("Failed to move objects.TRACK file from game directory: FROM: " << game_path.value() + "/" + Communication::DLL_DUMPED_TRACK_FILE_NAME <<
+                    " TO: " << m_next_track_path << ec.message());
                 }
                 else
                 {
@@ -155,7 +157,7 @@ namespace AsphaltTas
         }
     }
 
-    void TrackViewerLayer::LoadTrackFromFile(const std::string& path) noexcept
+    void TrackViewerLayer::LoadTrackFromFile(const std::filesystem::path& path) noexcept
     {
         m_selected_object_state.m_object_id = CoreEngine::Scene3D::ObjectID::CreateInvalidID();
         m_show_non_triangle_meshes = true;
@@ -521,7 +523,7 @@ namespace AsphaltTas
                     {
                         if (!child.m_child_ptr) continue;
 
-                        const BulletTypes::UnalignedTransform combined = ComposeBulletTransforms(raw_transform, child.m_local_transform);
+                        const BulletTypes::UnalignedTransform combined = BulletTypes::Custom::ComposeBulletTransforms(raw_transform, child.m_local_transform);
 
                         RenderShapeAtTransform(child.m_child_ptr.get(), combined, info, name_prefix + " [Compound Child] ");
                     }
@@ -573,12 +575,13 @@ namespace AsphaltTas
         {
             ImGui::Indent();
 
-            {
+            // Deprecated in favor of native file dialogue
+            /*{
                 PUSH_SCOPED_STYLE_COLOR(ImGuiCol_Button, COLOR_GREEN);
                 if (ImGui::Button("Load Track##sceneload"))
                 {
                     ImGuiFileDialog::Instance()->OpenDialog("LoadTrackKey", "Load Serialized Track", ".TRACK");
-                }
+                } 
             }
 
             {
@@ -594,15 +597,6 @@ namespace AsphaltTas
                 if (ImGui::Button("Load Replay"))
                 {
                     ImGuiFileDialog::Instance()->OpenDialog("LoadReplayForTrackViewKey", "Load Replay", Communication::REPLAY_FILE_TYPE.c_str());
-                }
-            }
-
-            {
-                PUSH_SCOPED_STYLE_COLOR(ImGuiCol_Button, GuiStyle::COLOR_RED);
-                ImGui::SameLine();
-                if (ImGui::Button("Clear Replay"))
-                {
-                    LoadReplay(std::nullopt);
                 }
             }
 
@@ -640,8 +634,80 @@ namespace AsphaltTas
                     }
                 }
                 ImGuiFileDialog::Instance()->Close();
+            } */
+
+            {
+                PUSH_SCOPED_STYLE_COLOR(ImGuiCol_Button, COLOR_GREEN);
+                if (ImGui::Button("Load Track##sceneload"))
+                {
+                    CoreEngine::NativeFileDialogue::OpenDialogueConfig config;
+                    config.m_dialogue_name = L"Load Track";
+                    config.m_filter_name   = L"Load Track";
+                    config.m_filter_spec   = Communication::TRACK_FILE_TYPE_WITH_STAR_WIDE;
+                    config.m_main_window_handle = CoreEngine::Application::Get()->GetWindowPtr(m_handle)->GetHWND();
+                    CoreEngine::NativeFileDialogue::OpenFile(config, [this](CoreEngine::NativeFileDialogue::DialogueResult result)
+                    {
+                        if (result.IsSuccess())
+                        {
+                            LoadTrackFromFile(result.GetPath());
+                        }
+                    });
+                } 
             }
 
+            {
+                PUSH_SCOPED_STYLE_COLOR(ImGuiCol_Button, GuiStyle::COLOR_GREEN);
+                if (ImGui::Button("Export Ingame Track"))
+                {
+                    CoreEngine::NativeFileDialogue::CreateDialogueConfig config;
+                    config.m_dialogue_name      = L"Export Ingame Track";
+                    config.m_extension          = Communication::TRACK_FILE_TYPE_NO_DOT_WIDE;
+                    config.m_filter_spec        = Communication::TRACK_FILE_TYPE_WITH_STAR_WIDE;
+                    config.m_main_window_handle = CoreEngine::Application::Get()->GetWindowPtr(m_handle)->GetHWND();
+                    CoreEngine::NativeFileDialogue::CreateNewFile(config, [this](CoreEngine::NativeFileDialogue::DialogueResult result)
+                    {
+                        if (result.IsSuccess())
+                        {
+                            m_next_track_path = result.GetPath();
+                            auto ref = AsphaltDllManager::GetDllGeneralCommandsInRef(); 
+                            auto cur_id = AsphaltDllManager::GetDllStateOutCopy()->m_meta_data.m_last_completed_dump_request_id;
+                            ref->m_write_meta_data.m_dump_track_request_id = cur_id + 1;
+                            ref->m_write_meta_data.m_command_type = ComDllIn::CommandType::ExecuteCommand;
+                            m_has_to_move_track_file = true;
+                        }
+                    });
+                }
+            }
+
+            {
+                PUSH_SCOPED_STYLE_COLOR(ImGuiCol_Button, COLOR_GREEN);
+                if (ImGui::Button("Load Replay##loadreplaybutton"))
+                {
+                    CoreEngine::NativeFileDialogue::OpenDialogueConfig config;
+                    config.m_dialogue_name = L"Load Replay";
+                    config.m_filter_name   = L"Load Replay";
+                    config.m_filter_spec   = Communication::REPLAY_FILE_TYPE_WITH_STAR_WIDE;
+                    config.m_main_window_handle = CoreEngine::Application::Get()->GetWindowPtr(m_handle)->GetHWND();
+                    CoreEngine::NativeFileDialogue::OpenFile(config, [this](CoreEngine::NativeFileDialogue::DialogueResult result)
+                    {
+                        if (result.IsSuccess())
+                        {
+                            LoadReplay(Replay::DeserializeReplayFromFile(result.GetPath()));
+                        }
+                    });
+                }
+            }
+
+            ////////////////////
+
+            {
+                PUSH_SCOPED_STYLE_COLOR(ImGuiCol_Button, GuiStyle::COLOR_RED);
+                ImGui::SameLine();
+                if (ImGui::Button("Clear Replay"))
+                {
+                    LoadReplay(std::nullopt);
+                }
+            }
 
             if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen))
             {
@@ -816,7 +882,7 @@ namespace AsphaltTas
         ImGui::PopStyleVar(3);
     }
 
-    void TrackViewerLayer::LoadColorDefFromFile(const std::string& path) noexcept
+    void TrackViewerLayer::LoadColorDefFromFile(const std::filesystem::path& path) noexcept
     {
         std::ifstream file(path, std::ios::binary | std::ios::ate);
         if (!file) return;

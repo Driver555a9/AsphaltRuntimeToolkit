@@ -58,16 +58,17 @@ namespace CoreEngine
         ENGINE_ASSERT (m_window_ptr && "Failed to create window");
 
     #ifdef _WIN32
+        m_hwnd = glfwGetWin32Window(m_window_ptr);
         if (! config.m_is_decorated)
         {
-            HWND hwnd = glfwGetWin32Window(m_window_ptr);
-
+            HWND hwnd = reinterpret_cast<HWND>(m_hwnd);
             LONG style_ws = GetWindowLongPtr(hwnd, GWL_STYLE);
             style_ws &= ~(WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU);
             SetWindowLongPtr(hwnd, GWL_STYLE, style_ws);
 
             SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
         }
+
     #endif
 
         if ( (config.m_callback_disable_flags & WindowCreationConfig::CallbackDisableFlags::KeyCallback) == WindowCreationConfig::CallbackDisableFlags::NONE)
@@ -227,6 +228,11 @@ namespace CoreEngine
     ImGuiContext* Window::GetImGuiContext() noexcept
     {
         return m_imgui_context;
+    }
+
+    [[nodiscard]] void* Window::GetHWND() noexcept
+    {
+        return m_hwnd;
     }
 
     void Window::BeginFrame() noexcept

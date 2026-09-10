@@ -29,7 +29,7 @@ namespace AsphaltTas
     private:
         void OnLoadHotkeys(const std::string& path) noexcept;
 
-        bool m_use_transform_override_patch = true;
+        bool m_use_transform_override_patch = false;
         bool m_is_in_delete_all_process = false;
         CoreEngine::Timer m_delete_all_timer;
 

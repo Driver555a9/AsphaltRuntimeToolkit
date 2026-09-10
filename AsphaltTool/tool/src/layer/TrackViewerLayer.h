@@ -21,8 +21,8 @@ namespace AsphaltTas
         void OnImGuiRender_BottomOptionPanel() noexcept;
         void OnImGuiRender_RightOptionPanel()  noexcept;
 
-        void LoadTrackFromFile(const std::string& path) noexcept;
-        void LoadColorDefFromFile(const std::string& path) noexcept;
+        void LoadTrackFromFile(const std::filesystem::path& path) noexcept;
+        void LoadColorDefFromFile(const std::filesystem::path& path) noexcept;
         void LoadReplay(std::optional<Replay> replay) noexcept;
 
         static void CreateInstance() noexcept;
@@ -32,7 +32,7 @@ namespace AsphaltTas
     private:
         std::optional<AsphaltTas::Replay> m_current_replay;
         CoreEngine::DrawLines3D_RenderPipeline m_replay_draw_line_pipeline;
-        std::string m_next_track_path = "";
+        std::filesystem::path m_next_track_path = "";
         uint32_t m_ignore_next_mouse_deltas = 0;
         bool m_has_to_move_track_file = false; 
         bool m_render_gui = true;

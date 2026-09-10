@@ -174,7 +174,7 @@ namespace AsphaltTas::ReplayStateManager
             new_frame.m_replay_input.m_race_frame_tick                   = dll_out_state->m_replay_inputs.m_race_frame_tick;
             new_frame.m_replay_input.m_steer_value                       = dll_out_state->m_replay_inputs.m_steer_value;
             new_frame.m_replay_input.m_brake_value                       = dll_out_state->m_replay_inputs.m_brake_value;
-            new_frame.m_replay_input.m_nitro_activation_count_this_frame = dll_out_state->m_replay_inputs.m_nitro_activation_count_this_frame;
+            new_frame.m_replay_input.m_nitro_activation_count = dll_out_state->m_replay_inputs.m_nitro_activation_count;
             new_frame.m_replay_input.m_accelerator_value                 = dll_out_state->m_replay_inputs.m_accelerator_value;
             new_frame.m_replay_input.m_respawn_button_press              = dll_out_state->m_replay_inputs.m_respawn_button_press;
             new_frame.m_replay_input.m_racer_transform_mat4x4            = dll_out_state->m_racer_state.m_racer_transform_mat4x4;

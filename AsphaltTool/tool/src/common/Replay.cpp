@@ -141,9 +141,6 @@ namespace AsphaltTas
             constexpr char BRAKE_BITS[]                = "Brake";
             constexpr char ACCEL_BITS[]                = "Accel";
             constexpr char NITRO_ACTIVATIONS[]         = "NitroActivations";
-            /*constexpr char BARREL_ANGULAR_VELOCITIES[] = "BarrelAngular";
-            constexpr char BARREL_RBX_2228[]           = "BarrelRBX2228";
-            constexpr char BARREL_RBX_222C[]           = "BarrelRBX222C";*/
             constexpr char RESPAWN_BUTTON[]            = "RespawnButton";
         }
 
@@ -161,11 +158,11 @@ namespace AsphaltTas
         }
     }
 
-    bool Replay::SerializeReplayToFile(const Replay& replay, const std::string& path) noexcept
+    bool Replay::SerializeReplayToFile(const Replay& replay, const std::filesystem::path& path) noexcept
     {   
         try 
         {
-            CoreEngine::CommonUtility::WriteStringToFile(SerializeReplayToString(replay), path.c_str());
+            CoreEngine::CommonUtility::WriteStringToFile(SerializeReplayToString(replay), path);
             return true;
         } 
         catch (const std::exception& err)
@@ -175,11 +172,11 @@ namespace AsphaltTas
         }
     }
 
-    Replay Replay::DeserializeReplayFromFile(const std::string& file_path) noexcept
+    Replay Replay::DeserializeReplayFromFile(const std::filesystem::path& file_path) noexcept
     {
         try 
         {
-            return DeserializeReplayFromString(CoreEngine::CommonUtility::ReadFileToString(file_path.c_str()));
+            return DeserializeReplayFromString(CoreEngine::CommonUtility::ReadFileToString(file_path));
         }
         catch (const std::exception& err)
         {
@@ -224,7 +221,7 @@ namespace AsphaltTas
                 tick[SerializeKeys::ReplayInputs::STEER_BITS] = FloatToDecimal(in.m_steer_value);
                 tick[SerializeKeys::ReplayInputs::BRAKE_BITS] = FloatToDecimal(in.m_brake_value);
                 tick[SerializeKeys::ReplayInputs::ACCEL_BITS] = FloatToDecimal(in.m_accelerator_value);
-                tick[SerializeKeys::ReplayInputs::NITRO_ACTIVATIONS] = in.m_nitro_activation_count_this_frame;
+                tick[SerializeKeys::ReplayInputs::NITRO_ACTIVATIONS] = in.m_nitro_activation_count;
                 tick[SerializeKeys::ReplayInputs::RESPAWN_BUTTON]  = in.m_respawn_button_press;
 
                 j[SerializeKeys::ReplayInputs::ROOT].push_back(tick);
@@ -350,7 +347,7 @@ namespace AsphaltTas
             out_input.m_brake_value       = DecimalToFloat(input[SerializeKeys::ReplayInputs::BRAKE_BITS].value());
             out_input.m_accelerator_value = DecimalToFloat(input[SerializeKeys::ReplayInputs::ACCEL_BITS].value());
     
-            out_input.m_nitro_activation_count_this_frame = input[SerializeKeys::ReplayInputs::NITRO_ACTIVATIONS].get_uint32();
+            out_input.m_nitro_activation_count = input[SerializeKeys::ReplayInputs::NITRO_ACTIVATIONS].get_uint32();
 
             if (replay_version >= ReplayVersionMajor::VERSION_MAJOR_2)
             {

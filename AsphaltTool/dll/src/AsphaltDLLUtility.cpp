@@ -14,6 +14,11 @@ namespace AsphaltDLL::Utility
         std::ofstream g_debug_log;
     } 
 
+    std::ofstream& DONOTCALL_GetDebugLogInternal() noexcept
+    {
+        return g_debug_log;
+    }
+
     void InitConsole() noexcept 
     {
         AllocConsole();
@@ -72,16 +77,6 @@ namespace AsphaltDLL::Utility
         g_debug_log << "=== Debug log stopped ===" << std::endl;
         g_debug_log.flush();
         g_debug_log.close();
-    }
-
-    void LogToFile(const std::string& str) noexcept
-    {
-        g_debug_log << str << std::endl;
-    }
-
-    void LogToFile(const char* str) noexcept
-    {
-        g_debug_log << str << std::endl;
     }
 
     float RandomFloat(float min, float max) noexcept

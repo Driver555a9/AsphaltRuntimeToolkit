@@ -1,6 +1,8 @@
 #pragma once
 #include <string>
+#include <filesystem>
 
+//fwd
 namespace BulletTypes
 {
     class CollisionObject;
@@ -10,7 +12,8 @@ namespace AsphaltDLL
 {
     namespace Tests
     {
-        void LoadCustomTrack() noexcept;
+        void LoadCustomTrack(const std::filesystem::path& path) noexcept;
+        void BuildFlatGroundScene() noexcept;
 
         void PrintCollisionObjectTest(BulletTypes::CollisionObject* obj) noexcept;
 

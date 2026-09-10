@@ -1,6 +1,8 @@
 #pragma once
 
-#ifdef _WIN32
+#ifndef _WIN32 
+    #error "Windows API required for Communication header"
+#endif
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -38,7 +40,15 @@ namespace Communication
     };
 
     constexpr char DLL_DUMPED_TRACK_FILE_NAME[] = "objects.TRACK";
-    constexpr std::string REPLAY_FILE_TYPE = ".NEOREPLAY";
+    constexpr char REPLAY_FILE_TYPE[]           = ".NEOREPLAY";
+    constexpr char TRACK_FILE_TYPE[]            = ".TRACK";
+    constexpr wchar_t REPLAY_FILE_TYPE_WIDE[]   = L".NEOREPLAY";
+    constexpr wchar_t TRACK_FILE_TYPE_WIDE[]    = L".TRACK";
+    constexpr wchar_t TRACK_FILE_TYPE_NO_DOT_WIDE[]     = L"TRACK";
+    constexpr wchar_t REPLAY_FILE_TYPE_NO_DOT_WIDE[]    = L"NEOREPLAY";
+    constexpr wchar_t REPLAY_FILE_TYPE_WITH_STAR_WIDE[] = L"*.NEOREPLAY";
+    constexpr wchar_t TRACK_FILE_TYPE_WITH_STAR_WIDE[]  = L"*.TRACK";
+
     constexpr uint32_t CURRENT_NON_NEGOTIABLE_COMMUNICATION_VERSION = 6; // Detect dll ABI missmatches
 
     namespace DllOut
@@ -55,7 +65,7 @@ namespace Communication
             float m_brake_value {};
 
             //// Nitro
-            std::uint32_t m_nitro_activation_count_this_frame {};
+            std::uint32_t m_nitro_activation_count {};
 
             //// Accelerator
             float m_accelerator_value = 1;
@@ -245,7 +255,7 @@ namespace Communication
             float m_brake_value {};
 
             //// Nitro
-            std::uint32_t m_nitro_activation_count_this_frame {};
+            std::uint32_t m_nitro_activation_count {};
 
             //// Accelerator
             float m_accelerator_value {};
@@ -549,5 +559,3 @@ namespace Communication
 namespace ComSharedMem = Communication::SharedMemory;
 namespace ComDllIn = Communication::DllIn;
 namespace ComDllOut = Communication::DllOut;
-
-#endif

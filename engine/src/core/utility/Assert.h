@@ -8,7 +8,6 @@
 #define ENGINE_ASSERT(expr) assert(expr)
 
 #if defined(_MSC_VER)
-
     consteval const char* GetFileName(const char* path) 
     {
         const char* file = path;

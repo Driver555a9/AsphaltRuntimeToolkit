@@ -63,6 +63,7 @@ namespace CoreEngine
     ///////////////////////////////
         [[nodiscard]] GLFWwindow* GetGLFWwindow() noexcept;
         [[nodiscard]] ImGuiContext* GetImGuiContext() noexcept;
+        [[nodiscard]] void* GetHWND() noexcept;
 
         void BeginFrame() noexcept;
         void FinishFrame() noexcept;
@@ -74,10 +75,9 @@ namespace CoreEngine
 
         [[nodiscard]] std::pair<int, int> GetFramebufferSize() const noexcept;
         [[nodiscard]] float GetAspectRatio() const noexcept;
-
         [[nodiscard]] const char* GetTitle() const noexcept;
-
         [[nodiscard]] bool IsVisible() const noexcept;
+
 
     ///////////////////////////////
     // Copying forbidden
@@ -94,5 +94,6 @@ namespace CoreEngine
         Handle          m_handle {};
         GLFWwindow*     m_window_ptr      = nullptr;
         ImGuiContext*   m_imgui_context   = nullptr;
+        void*           m_hwnd            = nullptr;
     };
 }

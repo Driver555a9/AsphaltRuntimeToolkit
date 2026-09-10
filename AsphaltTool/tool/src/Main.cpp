@@ -1,9 +1,12 @@
 #include "core/application/Application.h"
+#include "core/utility/Assert.h"
 #include "core/utility/SingleAppInstance.h"
 
 #include "layer/MainLayer.h"
 
 #include "layer/TrackViewerLayer.h"
+
+#include <exception>
 
 int main()
 {
@@ -19,8 +22,15 @@ int main()
     
     if (single_app.IsFirstInstance())
     {
-        CoreEngine::Application app = CoreEngine::Application::Create(application_config);
-        AsphaltTas::MainLayer::CreateInstance();
-        app.Run();
+        try 
+        {
+            CoreEngine::Application app = CoreEngine::Application::Create(application_config);
+            AsphaltTas::MainLayer::CreateInstance();
+            app.Run();
+        } 
+        catch (const std::exception& e)
+        {
+            ENGINE_INFO_LOG(e.what());
+        }
     }
 }

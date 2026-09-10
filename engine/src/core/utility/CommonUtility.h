@@ -2,6 +2,7 @@
 
 //std
 #include <string>
+#include <filesystem>
 
 //glfw
 #define GLFW_INCLUDE_NONE
@@ -15,9 +16,9 @@ namespace CoreEngine
     namespace CommonUtility
     {
         ///Throws runtime error
-        [[nodiscard]] std::string ReadFileToString(const char* filepath);
+        [[nodiscard]] std::string ReadFileToString(const std::filesystem::path& path);
         ///Throws runtime error
-        void WriteStringToFile(const std::string& str, const char* filepath);
+        void WriteStringToFile(const std::string& str, const std::filesystem::path& path);
 
         [[nodiscard]] std::pair<double, double> GetMousePosition(GLFWwindow* window) noexcept;
 
